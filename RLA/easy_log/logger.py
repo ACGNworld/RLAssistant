@@ -511,7 +511,7 @@ def log_key_value(keys, values, prefix_name=''):
     # for (k, v) in d.itemsms():
     #     logkv(k, v)
 
-def dumpkvs():
+def dumpkvs(step = 100000):
     """
     Write all of the diagnostics from the current iteration
     """

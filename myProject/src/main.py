@@ -1,6 +1,6 @@
 import gymnasium as gym
 
-from ppo import PPO
+from stable_baselines3 import PPO
 import argparse
 from RLA.rla_argparser import arg_parser_postprocess
 from RLA import exp_manager
