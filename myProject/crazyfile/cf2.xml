@@ -66,7 +66,7 @@
   </asset>
 
   <worldbody>
-    <body name="cf2" pos="0 0 0.1" childclass="cf2">
+    <body name="cf2" pos="0 0 1" childclass="cf2">
       <freejoint/>
       <inertial pos="0 0 0" mass="0.033" diaginertia="1.395e-5 1.395e-5 2.173e-5"/>
       <camera name="track" pos="-1 0 .5" xyaxes="0 -1 0 1 0 2" mode="trackcom"/>
@@ -115,7 +115,7 @@
       <site name="motor2_site" pos="0.0325 -0.0325 0.013"/>
       <site name="motor3_site" pos="-0.0325 -0.0325 0.013"/>
       <site name="motor4_site" pos="-0.0325 0.0325 0.013"/>
-      <site name="center_site" pos="0 0 0.013"/>
+      <!-- <site name="center_site" pos="0 0 0.013"/> -->
 
     </body>
   </worldbody>
@@ -129,7 +129,7 @@
     <motor class="cf2" ctrlrange="0 1" gear="0 0 0.203125 0 0 0.0049611875" site="motor2_site" name="motor2"/>
     <motor class="cf2" ctrlrange="0 1" gear="0 0 0.203125 0 0 -0.0049611875" site="motor3_site" name="motor3"/>
     <motor class="cf2" ctrlrange="0 1" gear="0 0 0.203125 0 0 0.0049611875" site="motor4_site" name="motor4"/>
-    <motor class="cf2" ctrlrange="0 1" gear="0 0 0.3 0 0 0.01" site="center_site" name="body_thrust"/>
+    <!-- <motor class="cf2" ctrlrange="0 1" gear="0 0 0.3 0 0 0.01" site="center_site" name="body_thrust"/> -->
   </actuator>
 
   <sensor>
@@ -139,7 +139,7 @@
   </sensor>
 
   <keyframe>
-    <key name="hover" ctrl="0 0 0 0 0"/>
+    <key name="hover" ctrl="0 0 0 0"/>
     <!--  上面原来有：qpos="0 0 0.1 1 0 0 0" ctrl="0.26487 0 0 0 0"-->
   </keyframe>
 </mujoco>

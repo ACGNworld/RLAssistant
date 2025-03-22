@@ -1,5 +1,6 @@
 __credits__ = ["fjj"]
 
+from stable_baselines3 import PPO,SAC
 from typing import Dict, Optional, Union
 import numpy as np
 from gymnasium import utils
@@ -16,13 +17,13 @@ DEFAULT_CAMERA_CONFIG = {
 class CrazyflieEnv(MujocoEnv, utils.EzPickle):
     metadata = {
         "render_modes": ["human", "rgb_array", "depth_array"],
-        "render_fps": 100,
+        "render_fps": 250,
     }
 
     def __init__(
         self,
         xml_file: str = ".\crazyfile\scene.xml",
-        frame_skip: int = 5,
+        frame_skip: int = 2,
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
         target_pos: Optional[np.ndarray] = None,
         reset_noise_scale: float = 0.01,
@@ -34,10 +35,10 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
         )
         
         # 目标点设置（x, y, z）
-        self.target_pos = target_pos if target_pos is not None else np.array([0, 0, 0.5])
+        self.target_pos = target_pos if target_pos is not None else np.array([0, 0, 3])
         
         # 观测空间：位置(3) + 四元数(4) + 线速度(3) + 角速度(3)
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float64)
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32)
         
         # 动作空间：四个电机的推力（0-1）
         self.action_space = Box(low=0, high=1, shape=(4,), dtype=np.float32)
@@ -63,29 +64,35 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
             ],
             "render_fps": int(np.round(1.0 / self.dt)),
         }
+        self.i = int(0)
 
     def step(self, action):
         # 应用电机推力（带噪声）
         motor_noise = 0.01 * np.random.randn(4)
-        self.data.ctrl[:] = np.clip(action, 0, 1)
-        
+        # self.data.ctrl[:] = np.clip(action, 0, 1)
+
         # 执行物理仿真
-        self.do_simulation(self.data.ctrl, self.frame_skip)
+        self.do_simulation(action, self.frame_skip)
         
         # 获取当前状态
         current_pos = self.data.qpos[:3]
         current_height = current_pos[2]
         
         # 计算奖励
-        pos_error = np.linalg.norm(current_pos - self.target_pos)
+        pos_error = np.linalg.norm(current_pos[:2] - self.target_pos[:2])
         height_error = abs(current_height - self.target_pos[2])
-        reward = -0.5 * pos_error - 0.3 * height_error  # 加权惩罚
+        crash_panelty = 0
+        if current_height < 0.05: crash_panelty = -100 
+        reward = - 0.2 * pos_error - 0.5 * height_error + crash_panelty  # 加权惩罚
+        #少一个航向，少一个稳定
         
         # 终止条件
         terminated = bool(
             current_height < 0.05  # 坠毁检测
-            or np.any(np.abs(current_pos[:2])) > 10.0  # 飞出边界
+            or current_height > (self.target_pos[2] + 2)  # 高度超出范围
+            or np.any(np.abs(current_pos[:2])) > 5.0  # 飞出边界
         )
+        # truncated = terminated
         
         # 附加信息
         info = {
@@ -99,6 +106,12 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
         if self.render_mode == "human":
             self.render()
         
+        self.i += 1
+        if self.i > 100:
+            print(action)  #仅调试
+            print(info)
+            self.i = 0
+
         return self._get_obs(), reward, terminated, False, info
 
     def reset_model(self):
@@ -137,19 +150,18 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
 # )
 
 if __name__ == "__main__":
-    env = CrazyflieEnv(render_mode="human")
+    env = CrazyflieEnv(render_mode="human",target_pos=[0,0,3])
 
     # env.close()
-    # model = PPO("MlpPolicy", env, verbose=1, device="cpu")
-    # model.learn(total_timesteps=30_000)
+    # model = SAC("MlpPolicy", env, verbose=1)
+    model = PPO.load("ppo_quadrotor.pt", env)
+    env = CrazyflieEnv(target_pos=[0,0,3],render_mode="human")
     obs, _ = env.reset()
     for i in range(20000):
-        action = env.action_space.sample()
-        # action, _states = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, _ = env.step(action)
+        action, _ = model.predict(obs, deterministic=True)  # Pass only `obs`, not the tuple
+        obs, reward, terminated, truncated, info = env.step(action)
         env.render()
-        if i%2000 == 0:
-            env.reset()
         if terminated or truncated:
-            obs, _ = env.reset()
+            obs, _ = env.reset()  # Reset and unpack only `obs`
+
     env.close()
