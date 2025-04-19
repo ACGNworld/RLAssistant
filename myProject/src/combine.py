@@ -1,18 +1,38 @@
-__credits__ = ["fjj"]
-
-from stable_baselines3 import PPO,SAC
+from stable_baselines3 import SAC,PPO
 from typing import Dict, Optional, Union
 import numpy as np
 from gymnasium import utils
 from gymnasium.envs.mujoco import MujocoEnv
 from gymnasium.spaces import Box
+from scipy.spatial.transform import Rotation as R
 
 DEFAULT_CAMERA_CONFIG = {
-    "distance": 0.5,
+    "distance": 2.5,
     "azimuth": 150,
     "elevation": -30,
-    "lookat": [0, 0, 0.3]
+    "lookat": [0, 0, 2]
 }
+
+def quaternion2euler(quaternion):
+    r = R.from_quat(quaternion)
+    euler = r.as_euler('xyz')  # 返回弧度
+    return np.sin(euler)    # 保持姿态连续性
+
+def position_reward(current_pos, target_pos):
+    xy_error = np.linalg.norm(current_pos[:2] - target_pos[:2])
+    z_error = abs(current_pos[2] - target_pos[2])
+    reward_xy = np.exp(-2.0 * xy_error)
+    reward_z = np.exp(-3.0 * z_error)
+    if xy_error < 0.1 and z_error < 0.05:
+        reward_xy += 1.0
+    return reward_xy + reward_z
+
+def hover_stability_reward(euler, lin_vel, ang_vel):
+    return -0.05 * (
+        np.sum(np.square(euler)) +  # 欧拉角平方
+        np.linalg.norm(lin_vel) +
+        0.5 * np.linalg.norm(ang_vel)
+    )
 
 class CrazyflieEnv(MujocoEnv, utils.EzPickle):
     metadata = {
@@ -22,28 +42,22 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
 
     def __init__(
         self,
-        xml_file: str = ".\crazyfile\scene.xml",
+        xml_file: str = "./crazyfile/scene.xml",
         frame_skip: int = 2,
         default_camera_config: Dict[str, Union[float, int]] = DEFAULT_CAMERA_CONFIG,
         target_pos: Optional[np.ndarray] = None,
         reset_noise_scale: float = 0.01,
         **kwargs,
     ):
-        # 环境初始化
         utils.EzPickle.__init__(
             self, xml_file, frame_skip, default_camera_config, reset_noise_scale, **kwargs
         )
-        
-        # 目标点设置（x, y, z）
+
         self.target_pos = target_pos if target_pos is not None else np.array([0, 0, 3])
-        
-        # 观测空间：位置(3) + 四元数(4) + 线速度(3) + 角速度(3)
-        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(13,), dtype=np.float32)
-        
-        # 动作空间：四个电机的推力（0-1）
-        self.action_space = Box(low=0, high=1, shape=(4,), dtype=np.float32)
-        
         self._reset_noise_scale = reset_noise_scale
+
+        self.observation_space = Box(low=-np.inf, high=np.inf, shape=(12,), dtype=np.float32)
+        self.action_space = Box(low=-1, high=1, shape=(4,), dtype=np.float32)
 
         MujocoEnv.__init__(
             self,
@@ -54,89 +68,63 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
             **kwargs,
         )
 
-        # 设置元数据
-        self.metadata = {
-            "render_modes": [
-                "human",
-                "rgb_array",
-                "depth_array",
-                "rgbd_tuple",
-            ],
-            "render_fps": int(np.round(1.0 / self.dt)),
-        }
-        self.i = int(0)
+        self.metadata["render_fps"] = int(np.round(1.0 / self.dt))
+        self.i = 0
 
     def step(self, action):
-        # 应用电机推力（带噪声）
-        motor_noise = 0.01 * np.random.randn(4)
-        # self.data.ctrl[:] = np.clip(action, 0, 1)
+        scaled_action = (action + 1) / 2
+        scaled_action = np.clip(scaled_action, 0, 1)
+        self.do_simulation(scaled_action, self.frame_skip)
 
-        # 执行物理仿真
-        self.do_simulation(action, self.frame_skip)
-        
-        # 获取当前状态
-        current_pos = self.data.qpos[:3]
-        current_height = current_pos[2]
-        
-        # 计算奖励
-        pos_error = np.linalg.norm(current_pos[:2] - self.target_pos[:2])
-        height_error = abs(current_height - self.target_pos[2])
-        crash_panelty = 0
-        if current_height < 0.05: crash_panelty = -100 
-        reward = - 0.2 * pos_error - 0.5 * height_error + crash_panelty  # 加权惩罚
-        #少一个航向，少一个稳定
-        
-        # 终止条件
+        pos = self.data.qpos[:3]
+        quat = self.data.qpos[3:7]
+        lin_vel = self.data.qvel[:3]
+        ang_vel = self.data.qvel[3:6]
+        euler = quaternion2euler(quat)
+
+        # 奖励计算
+        r_pos = position_reward(pos, self.target_pos)
+        r_hover = hover_stability_reward(euler, lin_vel, ang_vel)
+        reward = r_pos + r_hover + 0.01  # 生存奖励
+
+        # 终止条件（单位为弧度）
         terminated = bool(
-            current_height < 0.05  # 坠毁检测
-            or current_height > (self.target_pos[2] + 2)  # 高度超出范围
-            or np.any(np.abs(current_pos[:2])) > 5.0  # 飞出边界
+            pos[2] < 0.05 or
+            pos[2] > (self.target_pos[2] + 2) or
+            np.any(np.abs(pos[:2]) > 5.0) or
+            np.any(np.abs(euler[:2]) > np.sin(45))
         )
-        # truncated = terminated
-        
-        # 附加信息
+        if terminated:
+            reward -= 10.0
+
         info = {
-            "position_error": pos_error,
-            "height_error": height_error,
+            "position_error": np.linalg.norm(pos[:2] - self.target_pos[:2]),
+            "height_error": abs(pos[2] - self.target_pos[2]),
             "target_position": self.target_pos,
-            "current_position": current_pos
+            "current_position": pos,
         }
-        
-        # 处理渲染
+
         if self.render_mode == "human":
             self.render()
-        
-        self.i += 1
-        if self.i > 100:
-            print(action)  #仅调试
-            print(info)
-            self.i = 0
 
         return self._get_obs(), reward, terminated, False, info
 
     def reset_model(self):
-        # 重置初始状态（带噪声）
-        qpos = self.init_qpos
-        qvel = self.init_qvel
+        noise = self._reset_noise_scale
+        qpos = self.init_qpos + noise * np.random.randn(self.model.nq)
+        qvel = self.init_qvel + noise * np.random.randn(self.model.nv)
+        # qpos[3:7] = [0, 0, 0, 1]  # 初始为水平姿态
         self.set_state(qpos, qvel)
         return self._get_obs()
 
     def _get_obs(self):
-        """组合观测向量：
-        - 位置 (3)
-        - 四元数 (4)
-        - 线速度 (3)
-        - 角速度 (3)
-        """
-        return np.concatenate([
-            self.data.qpos[:3],      # x, y, z 位置
-            self.data.qpos[3:7],     # 四元数姿态
-            self.data.qvel[:3],      # 线速度
-            self.data.qvel[3:6]      # 角速度
-        ])
+        pos = self.data.qpos[:3]
+        euler = quaternion2euler(self.data.qpos[3:7])
+        vel = self.data.qvel[:3]
+        ang_vel = self.data.qvel[3:6]
+        return np.concatenate([pos, euler, vel, ang_vel])
 
     def viewer_setup(self):
-        """自定义视角设置"""
         self.viewer.cam.distance = 0.8
         self.viewer.cam.azimuth = 180
         self.viewer.cam.elevation = -30
@@ -152,9 +140,8 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
 if __name__ == "__main__":
     env = CrazyflieEnv(render_mode="human",target_pos=[0,0,3])
 
-    # env.close()
-    # model = SAC("MlpPolicy", env, verbose=1)
-    model = PPO.load("ppo_quadrotor.pt", env)
+    # model = SAC.load("sac_quadrotor.pt", env)
+    model = PPO.load("ppo_quadrotor.pt", env,device='cpu')
     env = CrazyflieEnv(target_pos=[0,0,3],render_mode="human")
     obs, _ = env.reset()
     for i in range(20000):
