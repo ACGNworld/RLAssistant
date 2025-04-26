@@ -33,8 +33,8 @@ class BasicLogTool(object):
             self.log_types.extend(optional_log_type)
     
     def is_valid_index(self, regex):
-        if re.search(r'\d{4}/\d{2}/\d{2}/\d{2}-\d{2}-\d{2}-\d{6}', regex):
-            target_reg = re.search(r'\d{4}/\d{2}/\d{2}/\d{2}-\d{2}-\d{2}-\d{6}', regex).group(0)
+        if re.search(r'\d{4}[/\\]\d{2}[/\\]\d{2}[/\\]\d{2}[-:]\d{2}[-:]\d{2}[-:]\d{6}', regex):
+            target_reg = re.search(r'\d{4}[/\\]\d{2}[/\\]\d{2}[/\\]\d{2}[-:]\d{2}[-:]\d{2}[-:]\d{6}', regex).group(0)
         else:
             target_reg = None
         return target_reg
@@ -51,7 +51,7 @@ class BasicLogTool(object):
                         if LOG in root_dir_regex:
                             try:
                                 print(
-                                    re.search(r'\d{4}/\d{2}/\d{2}/\d{2}-\d{2}-\d{2}-\d{6}', file_list[0]).group(1))
+                                    re.search(r'\d{4}[/\\]\d{2}[/\\]\d{2}[/\\]\d{2}[-:]\d{2}[-:]\d{2}[-:]\d{6}', file_list[0]).group(1))
                                 raise RuntimeError("found repeated timestamp")
                             except IndexError as e:
                                 pass
@@ -75,6 +75,7 @@ class BasicLogTool(object):
                                             small_timestep_regs.append([target_reg, file_list[0]])
                                             print("[delete] find an experiment satisfied timestep range. ", file_list[0])
                                         else:
+                                            small_timestep_regs.append([target_reg, file_list[0]])
                                             print("[valid]")
                                     except Exception as e:
                                         print("Load progress.csv failed", e, "reg", target_reg)
@@ -313,6 +314,7 @@ class ViewLogTool(BasicLogTool):
 
     def _view_log(self, regex):
         root_dir_regex = osp.join(self.proj_root, LOG, self.task_table_name, regex)
+        print("here2")
         for root_dir in glob.glob(root_dir_regex):
             if os.path.exists(root_dir):
                 for file_list in os.walk(root_dir):

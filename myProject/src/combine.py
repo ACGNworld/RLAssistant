@@ -83,7 +83,7 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
         euler = quaternion2euler(quat)
 
         # 奖励计算
-        r_pos = position_reward(pos, self.target_pos)
+        r_pos = position_reward(pos, self.target_pos)#TODO:越飞越高
         r_hover = hover_stability_reward(euler, lin_vel, ang_vel)
         reward = r_pos + r_hover + 0.01  # 生存奖励
 

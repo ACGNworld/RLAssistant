@@ -2,7 +2,6 @@ import argparse
 import os
 from stable_baselines3 import SAC,PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
-from stable_baselines3.common.callbacks import CheckpointCallback
 
 from RLA.rla_argparser import arg_parser_postprocess
 from RLA import exp_manager, logger
@@ -15,7 +14,7 @@ def mujoco_arg_parser():
     parser.add_argument('--env', type=str, default='CrazyFile')
     parser.add_argument('--policy_type', type=str, default='MlpPolicy')
     parser.add_argument('--seed', type=int, default=18)
-    parser.add_argument('--total_timesteps', type=int, default=50000)
+    parser.add_argument('--total_timesteps', type=int, default=300000)
     parser.add_argument('--render_mode', type=str, default="human")
     parser.add_argument('--eval', action='store_true', help='Only run evaluation')
     return arg_parser_postprocess(parser).parse_args()
@@ -32,7 +31,6 @@ exp_manager.add_record_param(["info", "seed", 'env'])
 exp_manager.configure(task_name, rla_config='./rla_config.yaml', data_root='./')
 exp_manager.log_files_gen()
 exp_manager.print_args()
-exp_manager.new_saver(max_to_keep=5)
 
 
 if args.eval:
@@ -72,7 +70,7 @@ else:
     #     verbose=1,
     #     device='cuda'
     # )
-    model = PPO(args.policy_type, vec_env, verbose=1, seed=args.seed, device='cpu')
+    model = PPO(args.policy_type, vec_env, verbose=1, seed=args.seed, device='cpu')#TODO:没存下来
 
     # [RLA] SB3 logger兼容
     logger.record = logger.record_tabular
