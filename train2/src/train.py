@@ -28,16 +28,6 @@ def make_env():
 
 args = mujoco_arg_parser()
 
-# ===== 自定义策略网络（Sigmoid 输出层） =====
-class CustomActorCriticPolicy(ActorCriticPolicy):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # 替换 action_net 为 Sigmoid 输出
-        self.action_net = nn.Sequential(
-            nn.Linear(64, 4),  # 假设隐藏层是64维，输出4个电机推力
-            nn.Sigmoid()       # 强制输出在 [0,1]
-        )
-
 # ==== RLA config ====
 if not args.nr:
     task_name = 'quadrotor-RLA-PPO'
@@ -55,7 +45,7 @@ if args.eval:
     vec_env.training = False
     vec_env.norm_reward = False
 
-    model = PPO.load("sac_quadrotor.pt", env=vec_env)
+    model = PPO.load("ppo_quadrotor.pt", env=vec_env)
     obs = vec_env.reset()
     for _ in range(20000):
         action, _ = model.predict(obs, deterministic=True)
@@ -86,7 +76,7 @@ else:
     #     device='cuda'
     # )
     model = PPO(
-        CustomActorCriticPolicy,  # 替换为自定义策略，原来是args.policy_type
+        args.policy_type,  # 替换为自定义策略，原来是args.policy_type
         vec_env,
         verbose=1,
         seed=args.seed,
@@ -109,5 +99,5 @@ else:
     model.save("ppo_quadrotor.pt")
     backup_model_path = os.path.join(exp_manager.log_dir,"ppo_quadrotor.pt")
     model.save(backup_model_path)
-    # vec_env.save("ppo_vec_normalize.pkl")
+    vec_env.save("ppo_vec_normalize.pkl")
     vec_env.close()

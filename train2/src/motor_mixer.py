@@ -97,7 +97,7 @@ if __name__ == '__main__':
     arm_length = 0.065/2.0  # 电机力臂长度 单位m
     Ct = 3.25e-4            # 电机推力系数 (N/krpm^2)
     Cd = 7.9379e-6          # 电机反扭系数 (Nm/krpm^2)
-    max_speed  = 25 # 电机最大转速(krpm)
+    max_speed  = 22 # 电机最大转速(krpm)
     max_thrust = Ct*(max_speed**2)    # 单个电机最大推力 单位N (电机最大转速22krpm)
     max_torque = Cd*(max_speed**2)  # 单个电机最大扭矩 单位Nm (电机最大转速22krpm)
     print(f"Max Thrust:{max_thrust} Max Torque:{max_torque}")

@@ -25,6 +25,9 @@ def mujoco_arg_parser():
 
 def make_env():
     return CrazyflieEnv(target_pos=[0, 0, 3])
+def make_env_human():
+    return CrazyflieEnv(target_pos=[0, 0, 3],render_mode="human")
+
 
 args = mujoco_arg_parser()
 
@@ -50,18 +53,18 @@ if not args.nr:
 
 if args.eval:
     # ========== 推理模式 ==========
-    vec_env = DummyVecEnv([make_env])
-    vec_env = VecNormalize.load("vec_normalize.pkl", vec_env)
+    vec_env = DummyVecEnv([make_env_human])
+    vec_env = VecNormalize.load("ppo_vec_normalize.pkl", vec_env)
     vec_env.training = False
     vec_env.norm_reward = False
 
-    model = PPO.load("sac_quadrotor.pt", env=vec_env)
+    model = PPO.load("ppo_quadrotor.pt", env=vec_env)
     obs = vec_env.reset()
     for _ in range(20000):
         action, _ = model.predict(obs, deterministic=True)
-        obs, reward, terminated, truncated, info = vec_env.step(action)
+        obs, reward, terminated, info = vec_env.step(action)
         vec_env.render()
-        if terminated or truncated:
+        if terminated:
             obs = vec_env.reset()
     vec_env.close()
 
@@ -109,5 +112,5 @@ else:
     model.save("ppo_quadrotor.pt")
     backup_model_path = os.path.join(exp_manager.log_dir,"ppo_quadrotor.pt")
     model.save(backup_model_path)
-    # vec_env.save("ppo_vec_normalize.pkl")
+    vec_env.save("ppo_vec_normalize.pkl")
     vec_env.close()
