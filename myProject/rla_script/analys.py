@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import os
 
 # 读取 CSV 文件
-csv_path = ".\\log\\quadrotor-RLA-PPO\\2025\\04\\25\\22-11-08-429486_192.168.31.159_&info=default exp info&seed=18&env=CrazyFile\\progress.csv"
+csv_path = ".\\log\\quadrotor-RLA-PPO\\2025\\04\\26\\14-14-28-230599_192.168.31.159_&info=default exp info&seed=18&env=CrazyFile\\progress.csv"
 df = pd.read_csv(csv_path)
 
 # 获取CSV文件所在目录
