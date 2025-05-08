@@ -71,7 +71,7 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
 
         # self.action_space = Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32) #mujocoEnv会强制改回(0,1)
         self.metadata["render_fps"] = int(np.round(1.0 / self.dt))
-        self.i = 0
+        self.count = 0
 
     def step(self, action):
         # scaled_action = (action + 1) / 2
@@ -104,8 +104,9 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
             "height_error": abs(pos[2] - self.target_pos[2]),
             "target_position": self.target_pos,
             "current_position": pos,
+            "episode": {"r": reward, "l": self.count},
         }
-
+        self.count += 1
         if self.render_mode == "human":
             self.render()
 
@@ -116,6 +117,7 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
         qpos = self.init_qpos + noise * np.random.randn(self.model.nq)
         qvel = self.init_qvel + noise * np.random.randn(self.model.nv)
         self.set_state(qpos, qvel)
+        self.count = 0
         return self._get_obs()
 
     def _get_obs(self):

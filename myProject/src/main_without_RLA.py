@@ -2,6 +2,7 @@ import argparse
 import os
 from stable_baselines3 import SAC,PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.policies import ActorCriticPolicy
 import torch.nn as nn
@@ -23,7 +24,7 @@ def mujoco_arg_parser():
     return arg_parser_postprocess(parser).parse_args()
 
 def make_env():
-    return CrazyflieEnv(target_pos=[0, 0, 3])
+    return Monitor(CrazyflieEnv(target_pos=[0, 0, 3]))
 def make_env_human():
     return CrazyflieEnv(target_pos=[0, 0, 3],render_mode="human")
 
