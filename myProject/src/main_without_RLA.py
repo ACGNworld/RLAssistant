@@ -84,7 +84,7 @@ else:
     )
 
     # 开始训练
-    print("动作空间:", vec_env.action_space)  # TODO:检查为什么不一样
+    print("动作空间:", vec_env.action_space)
     print(model.policy)
     if args.nr:
         exit(0)

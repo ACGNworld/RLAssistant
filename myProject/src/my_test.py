@@ -1,7 +1,10 @@
 import argparse
 import os
+import sys
+import shutil
 from stable_baselines3 import SAC,PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.policies import ActorCriticPolicy
 import torch.nn as nn
@@ -12,19 +15,20 @@ from RLA import exp_manager, logger
 from combine import CrazyflieEnv
 
 
+
 def mujoco_arg_parser():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--env', type=str, default='CrazyFile')
     parser.add_argument('--policy_type', type=str, default='MlpPolicy')
     parser.add_argument('--seed', type=int, default=18)
-    parser.add_argument('--total_timesteps', type=int, default=200000)
+    parser.add_argument('--total_timesteps', type=int, default=250000)
     parser.add_argument('--render_mode', type=str, default="human")
     parser.add_argument('--eval', action='store_true', help='Only run evaluation')
     parser.add_argument('--nr',action='store_true',help='enable RLAssisant logger')
     return arg_parser_postprocess(parser).parse_args()
 
 def make_env():
-    return CrazyflieEnv(target_pos=[0, 0, 3])
+    return Monitor(CrazyflieEnv(target_pos=[0, 0, 3]))
 def make_env_human():
     return CrazyflieEnv(target_pos=[0, 0, 3],render_mode="human")
 
@@ -49,6 +53,24 @@ if not args.nr:
     exp_manager.configure(task_name, rla_config='./rla_config.yaml', data_root='./')
     exp_manager.log_files_gen()
     exp_manager.print_args()
+    log_dir = exp_manager.log_dir
+    os.makedirs(log_dir, exist_ok=True)
+else:
+    log_dir = "./tensorboard_logs/"
+    os.makedirs(log_dir, exist_ok=True)
+class Tee:
+    """同时输出到控制台和文件"""
+    def __init__(self, *files):
+        self.files = files
+    
+    def write(self, text):
+        for f in self.files:
+            f.write(text)
+            f.flush()  # 确保实时写入
+    
+    def flush(self):
+        for f in self.files:
+            f.flush()
 
 
 if args.eval:
@@ -79,42 +101,29 @@ else:
     # ========== 训练模式 ==========
     vec_env = DummyVecEnv([make_env])
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True)
-    vec_env.envs[0]._max_episode_steps = 10000
+    vec_env.envs[0]._max_episode_steps = 5000
     
-    # model = SAC(
-    #     "MlpPolicy",
-    #     vec_env,
-    #     learning_rate=1e-3,        # 增大学习率
-    #     buffer_size=200000,        # 更大的回放缓冲区
-    #     batch_size=256,            # 更大的批次
-    #     tau=0.01,                  # 更快的目标网络更新
-    #     train_freq=(1, "episode"), # 每episode更新一次
-    #     gradient_steps=32,         # 更多梯度步
-    #     ent_coef='auto',           # 自动调整熵系数
-    #     target_entropy='auto',     # 确保自动熵调整生效
-    #     verbose=1,
-    #     device='cuda'
-    # )
     model = PPO(
-        CustomActorCriticPolicy,  # 替换为自定义策略，原来是args.policy_type
+        # CustomActorCriticPolicy,  # 替换为自定义策略，原来是args.policy_type
+        "MlpPolicy",
         vec_env,
-        learning_rate=1e-3,
+        learning_rate=6e-4,
         gamma=0.995,
-        ent_coef='auto',
         verbose=1,
         seed=args.seed,
-        device='cpu' 
+        device='cpu',
+        tensorboard_log=log_dir
     )
 
     # [RLA] SB3 logger兼容
     if not args.nr:
-        logger.record = logger.record_tabular
-        logger.dump = logger.dump_tabular
-        model._logger = logger
-        model._custom_logger = True
+        log_path = os.path.join(exp_manager.log_dir,"log.txt")
+        log_file = open(log_path, "w")
+        original_stdout = sys.stdout# 保存原始 stdout
+        sys.stdout = Tee(sys.stdout, log_file) # 使用 Tee 同时输出到控制台和文件
 
     # 开始训练
-    print("动作空间:", vec_env.action_space)  # TODO:检查为什么不一样
+    print("动作空间:", vec_env.action_space)
     print(model.policy)
     if args.nr:
         exit(0)
@@ -126,3 +135,8 @@ else:
     backup_model_path = os.path.join(exp_manager.log_dir,"ppo_vec_normalize.pkl")
     vec_env.save(backup_model_path)
     vec_env.close()
+
+    if not args.nr:
+        # 恢复 stdout 并关闭文件
+        sys.stdout = original_stdout
+        log_file.close()
