@@ -17,7 +17,7 @@ def mujoco_arg_parser():
     parser.add_argument('--env', type=str, default='CrazyFile')
     parser.add_argument('--policy_type', type=str, default='MlpPolicy')
     parser.add_argument('--seed', type=int, default=18)
-    parser.add_argument('--total_timesteps', type=int, default=100000)
+    parser.add_argument('--total_timesteps', type=int, default=200000)
     parser.add_argument('--render_mode', type=str, default="human")
     parser.add_argument('--eval', action='store_true', help='Only run evaluation')
     parser.add_argument('--nr',action='store_true',help='enable RLAssisant logger')
@@ -60,9 +60,16 @@ if args.eval:
 
     model = PPO.load("ppo_quadrotor.pt", env=vec_env)
     obs = vec_env.reset()
+    i = 0
     for _ in range(20000):
         action, _ = model.predict(obs, deterministic=True)
         obs, reward, terminated, info = vec_env.step(action)
+        i+=1
+        if(i > 100):
+            i = 0
+            print(info)
+            print(reward)
+            # print(action)
         vec_env.render()
         if terminated:
             obs = vec_env.reset()
@@ -72,7 +79,7 @@ else:
     # ========== 训练模式 ==========
     vec_env = DummyVecEnv([make_env])
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True)
-    vec_env.envs[0]._max_episode_steps = 5000
+    vec_env.envs[0]._max_episode_steps = 10000
     
     # model = SAC(
     #     "MlpPolicy",
@@ -91,6 +98,9 @@ else:
     model = PPO(
         CustomActorCriticPolicy,  # 替换为自定义策略，原来是args.policy_type
         vec_env,
+        learning_rate=1e-3,
+        gamma=0.995,
+        ent_coef='auto',
         verbose=1,
         seed=args.seed,
         device='cpu' 
@@ -113,4 +123,6 @@ else:
     backup_model_path = os.path.join(exp_manager.log_dir,"ppo_quadrotor.pt")
     model.save(backup_model_path)
     vec_env.save("ppo_vec_normalize.pkl")
+    backup_model_path = os.path.join(exp_manager.log_dir,"ppo_vec_normalize.pkl")
+    vec_env.save(backup_model_path)
     vec_env.close()

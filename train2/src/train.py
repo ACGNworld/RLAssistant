@@ -43,7 +43,8 @@ if args.eval:
     vec_env = DummyVecEnv([make_env])
     vec_env = VecNormalize.load("vec_normalize.pkl", vec_env)
     vec_env.training = False
-    vec_env.norm_reward = False
+    vec_env.norm_reward = True
+    vec_env.norm_obs = True
 
     model = PPO.load("ppo_quadrotor.pt", env=vec_env)
     obs = vec_env.reset()

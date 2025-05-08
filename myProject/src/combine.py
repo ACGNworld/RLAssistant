@@ -69,7 +69,7 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
             **kwargs,
         )
 
-        # self.action_space = Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32) #mujocoEnv会强制改回(0,0)
+        # self.action_space = Box(low=-1.0, high=1.0, shape=(4,), dtype=np.float32) #mujocoEnv会强制改回(0,1)
         self.metadata["render_fps"] = int(np.round(1.0 / self.dt))
         self.i = 0
 
@@ -85,7 +85,7 @@ class CrazyflieEnv(MujocoEnv, utils.EzPickle):
         euler = quaternion2euler(quat)
         # print(pos) #debug
         # 奖励计算
-        r_pos = position_reward(pos, self.target_pos)#TODO:往一边飞
+        r_pos = position_reward(pos, self.target_pos)
         r_hover = hover_stability_reward(euler, lin_vel, ang_vel)
         reward = r_pos + r_hover
 
